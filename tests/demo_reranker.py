@@ -1,26 +1,25 @@
 """
-간단한 Reranker 데모:
-1) job_postings에서 일부 문서를 로드
-2) dragonkue 임베딩 + Chroma로 1차 검색
-3) BGE Reranker로 재정렬
+간단한 Reranker 데모 (벡터 DB + BGE Reranker)
 """
 
 import sqlite3
+from pathlib import Path
 from typing import List
 
 from langchain.docstore.document import Document
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
-DB_PATH = "career_matcher/jobs.db"
-VECTOR_DIR = "career_matcher/vector_db_demo"
+from career_matcher.configs import settings
+from career_matcher.embedding.embedding_models import get_embedding_model
+
+DEMO_VECTOR_DIR = settings.VECTOR_DB_DIR / "demo"
 
 
 def load_documents(limit: int = 200) -> List[Document]:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(settings.SQLITE_PATH)
     rows = conn.execute(
         "SELECT job_id, title, company, location, career, education, job_category, skills, summary, url "
         "FROM job_postings WHERE summary != '' LIMIT ?",
@@ -45,14 +44,12 @@ def load_documents(limit: int = 200) -> List[Document]:
 
 
 def build_vectorstore(documents: List[Document]):
-    embeddings = HuggingFaceEmbeddings(
-        model_name="dragonkue/multilingual-e5-small-ko",
-        encode_kwargs={"normalize_embeddings": True},
-    )
+    DEMO_VECTOR_DIR.mkdir(parents=True, exist_ok=True)
+    embeddings = get_embedding_model()
     vectordb = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
-        persist_directory=VECTOR_DIR,
+        persist_directory=str(DEMO_VECTOR_DIR),
         collection_name="demo_jobs",
     )
     vectordb.persist()
@@ -67,7 +64,7 @@ def main():
     vectordb = build_vectorstore(docs)
 
     retriever = vectordb.as_retriever(search_kwargs={"k": 20})
-    cross_encoder = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-large")
+    cross_encoder = HuggingFaceCrossEncoder(model_name=settings.RERANKER_MODEL_NAME)
     reranker = CrossEncoderReranker(model=cross_encoder, top_n=5)
     compressed_retriever = ContextualCompressionRetriever(
         base_compressor=reranker,

@@ -1,19 +1,13 @@
 import os
-import sys
-from pathlib import Path
 from typing import List
 
 import streamlit as st
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-# Ensure project root is on sys.path when running via `streamlit run`
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from career_matcher import profile_builder
-from career_matcher.rag_retriever import build_reranked_retriever
+from career_matcher.configs import settings
+from career_matcher.processing import keyword_parser
+from career_matcher.retriever.rag_retriever import RerankedJobRetriever
 
 
 st.set_page_config(page_title="커리어 매칭 RAG", page_icon="🧭", layout="wide")
@@ -28,10 +22,10 @@ def load_llm():
 
 @st.cache_resource(show_spinner="벡터 DB + Reranker 준비 중...")
 def load_retriever():
-    return build_reranked_retriever()
+    return RerankedJobRetriever()
 
 
-def summarize_profile(parsed_profile: profile_builder.UserProfile) -> str:
+def summarize_profile(parsed_profile: keyword_parser.UserProfile) -> str:
     lines = [
         f"- 직무 후보: {', '.join(parsed_profile.job_terms) or '미정'}",
         f"- 스킬: {', '.join(parsed_profile.skill_terms) or '미정'}",
@@ -130,7 +124,7 @@ def main():
             if not profile_text.strip():
                 st.warning("프로필 내용을 입력하세요.")
             else:
-                parsed = profile_builder.build_profile(profile_text)
+                parsed = keyword_parser.build_profile(profile_text)
                 summary = summarize_profile(parsed)
                 st.session_state.profile = parsed
                 st.session_state.profile_summary = summary
@@ -220,6 +214,6 @@ def main():
 
 
 if __name__ == "__main__":
-    if not os.path.exists("career_matcher/vector_db"):
-        st.warning("vector_db가 없습니다. `python career_matcher/vector_pipeline.py --limit 1000`을 먼저 실행하세요.")
+    if not os.path.exists(settings.VECTOR_DB_DIR):
+        st.warning("vector_db가 없습니다. `python -m career_matcher.embedding.vector_pipeline --limit 1000`을 먼저 실행하세요.")
     main()

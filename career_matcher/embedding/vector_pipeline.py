@@ -1,19 +1,16 @@
 import argparse
-import os
 import sqlite3
 from typing import List, Optional
 
 from langchain.docstore.document import Document
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 
-DB_PATH = "career_matcher/jobs.db"
-VECTOR_DIR = "career_matcher/vector_db"
-COLLECTION_NAME = "career_jobs"
+from career_matcher.configs import settings
+from career_matcher.embedding.embedding_models import get_embedding_model
 
 
 def fetch_job_documents(limit: Optional[int] = None) -> List[Document]:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(settings.SQLITE_PATH)
     query = (
         "SELECT job_id, title, company, location, career, education, job_category, skills, summary, url "
         "FROM job_postings "
@@ -42,20 +39,17 @@ def fetch_job_documents(limit: Optional[int] = None) -> List[Document]:
     return docs
 
 
-def build_vector_store(documents: List[Document], persist_directory: str = VECTOR_DIR):
+def build_vector_store(documents: List[Document], persist_directory: Optional[str] = None):
     if not documents:
         raise ValueError("벡터화할 문서가 없습니다. 먼저 crawler로 데이터를 수집하세요.")
 
-    os.makedirs(persist_directory, exist_ok=True)
-    embeddings = HuggingFaceEmbeddings(
-        model_name="dragonkue/multilingual-e5-small-ko",
-        encode_kwargs={"normalize_embeddings": True},
-    )
+    persist_directory = persist_directory or str(settings.VECTOR_DB_DIR)
+    embeddings = get_embedding_model()
     vectordb = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
         persist_directory=persist_directory,
-        collection_name=COLLECTION_NAME,
+        collection_name=settings.CHROMA_COLLECTION_NAME,
     )
     vectordb.persist()
     return vectordb
@@ -64,7 +58,7 @@ def build_vector_store(documents: List[Document], persist_directory: str = VECTO
 def main():
     parser = argparse.ArgumentParser(description="job_postings DB를 임베딩하여 벡터 DB로 저장합니다.")
     parser.add_argument("--limit", type=int, default=None, help="처리할 문서 수 제한")
-    parser.add_argument("--persist-dir", default=VECTOR_DIR, help="Chroma persist 경로")
+    parser.add_argument("--persist-dir", default=str(settings.VECTOR_DB_DIR), help="Chroma persist 경로")
     args = parser.parse_args()
 
     docs = fetch_job_documents(limit=args.limit)
