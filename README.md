@@ -1,3 +1,9 @@
+• 준비 끝났어. 지금 상태로 바로 돌리면 돼:
+
+  1. docker compose up -d --build
+  2. ./cloudflare_tunnel.sh → 나온 URL을 n8n API 호출에 넣기
+  3. n8n 워크플로우 Import → Notion Token/DB ID만 연결
+
 # 커리어 매칭 RAG 파이프라인 - 데이터 수집 모듈
 
 이 폴더는 “직무 키워드 → 채용공고 자동 수집 → DB 저장” 초기 모듈을 담고 있습니다.  
